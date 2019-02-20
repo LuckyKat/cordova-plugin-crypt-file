@@ -8,7 +8,7 @@
     <author>@tkyaji</author>
     <license>Apache 2.0 License</license>
 
-    <platform name="ios">
+    <!-- <platform name="ios">
         <config-file target="config.xml" parent="/*">
 		    <feature name="CDVCrypt">
 			    <param name="ios-package" value="CDVCrypt"/>
@@ -20,7 +20,7 @@
         <source-file src="src/ios/CDVCrypt.m" />
         <header-file src="src/ios/CDVCryptURLProtocol.h" />
         <source-file src="src/ios/CDVCryptURLProtocol.m" />
-    </platform>
+    </platform> -->
 
     <platform name="android">
         <config-file target="config.xml" parent="/*">
