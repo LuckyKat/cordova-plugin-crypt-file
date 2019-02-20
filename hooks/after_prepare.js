@@ -16,7 +16,7 @@ module.exports = function(context) {
     var key = crypto.randomBytes(24).toString('base64');
     var iv = crypto.randomBytes(12).toString('base64');
 
-    console.log('key=' + key + ', iv=' + iv);
+    console.log('key=' + key + ', iv=' + iv)
 
     var targetFiles = loadCryptFileTargets();
 
@@ -29,13 +29,6 @@ module.exports = function(context) {
         var platformApi = platforms.getPlatformApi(platform, platformPath);
         var platformInfo = platformApi.getPlatformInfo();
         var wwwDir = platformInfo.locations.www;
-        var pluginDir;
-
-        if (platform === 'ios') {
-            // skip iOS due to WKWebview issues
-            console.log('cordova-plugin-crypt-file: skipped iOS, use other plugin for encryption.');
-            return;
-        }
 
         findCryptFiles(wwwDir).filter(function(file) {
             return fs.statSync(file).isFile() && isCryptFile(file.replace(wwwDir, ''));
@@ -45,7 +38,34 @@ module.exports = function(context) {
             console.log('encrypt: ' + file);
         });
 
+        // going to replace IonicWebViewEngine.java
+        var javaPath;
+        // platforms/android/app/src/main/java/com/ionicframework/cordova/webview/IonicWebViewEngine.java
+        javaPath = path.join(platformPath, 'app', 'src', 'main', 'java', 'com', 'ionicframework', 'cordova', 'webview', 'IonicWebViewEngine.java');
+
+        if (!fs.existsSync(javaPath)) {
+            // try cordova <7 path
+            // platforms/android/src/com/ionicframework/cordova/webview/IonicWebViewEngine.java
+            javaPath = path.join(platformPath, 'src', 'com', 'ionicframework', 'cordova', 'webview', 'IonicWebViewEngine.java');
+        }
+        if (fs.existsSync(javaPath)) {
+            var javaString = fs.readFileSync(javaPath, 'utf-8');
+            console.log('edit IonicWebViewEngine.java');
+            javaString = javaString.replace(/@RequiresApi([\S+\n\r\s]+?)onPageStarted/g, 
+                `@Override
+    public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+      return super.shouldInterceptRequest(view, request);
+    }
+
+    @Override
+    public void onPageStarted`
+            );
+            fs.writeFileSync(javaPath, javaString, 'utf-8');
+        }
+
+
         if (platform == 'ios') {
+            var pluginDir;
             try {
               var ios_parser = context.requireCordovaModule('cordova-lib/src/cordova/metadata/ios_parser'),
                   iosParser = new ios_parser(platformPath);
@@ -61,21 +81,34 @@ module.exports = function(context) {
             replaceCryptKey_ios(pluginDir, key, iv);
 
         } else if (platform == 'android') {
-            pluginDir = path.join(platformPath, 'app', 'src', 'main', 'java');
-            
-            // backwards compatibility with cordova <7
-            if (!fs.existsSync(pluginDir)) {
-                pluginDir = path.join(platformPath, 'src');
+            if(wwwDir.includes("main"))
+            {
+                var pluginDir = path.join(platformPath, 'app/src/main/java');
             }
-
+            else
+            {
+                var pluginDir = path.join(platformPath, 'src');
+            }
             replaceCryptKey_android(pluginDir, key, iv);
 
             var cfg = new ConfigParser(platformInfo.projectConfig.path);
-            cfg.doc.getroot().getchildren().filter(function(child, idx, arr) {
-                return (child.tag == 'content');
-            }).forEach(function(child) {
-                child.attrib.src = '/+++/' + child.attrib.src;
-            });
+            var port = cfg.getGlobalPreference("cryptoPort");
+            if( port == '')
+            {
+                cfg.doc.getroot().getchildren().filter(function(child, idx, arr) {
+                    return (child.tag == 'content');
+                }).forEach(function(child) {
+                    child.attrib.src = 'http://localhost:8080/' + child.attrib.src;
+                });
+            }
+            else
+            {
+                cfg.doc.getroot().getchildren().filter(function(child, idx, arr) {
+                    return (child.tag == 'content');
+                }).forEach(function(child) {
+                    child.attrib.src = 'http://localhost:' + port + '/' + child.attrib.src;
+                });
+            }
 
             cfg.write();
         }
@@ -95,7 +128,7 @@ module.exports = function(context) {
         list.filter(function(file) {
             return fs.statSync(path.join(dir, file)).isDirectory();
         }).forEach(function(file) {
-            var subDir = path.join(dir, file);
+            var subDir = path.join(dir, file)
             var subFileList = findCryptFiles(subDir);
             fileList = fileList.concat(subFileList);
         });
@@ -124,7 +157,7 @@ module.exports = function(context) {
                         exclude.push(celm.attrib.regex.trim());
                     }
                 });
-            });
+            })
         }
 
         return {'include': include, 'exclude': exclude};
@@ -178,4 +211,4 @@ module.exports = function(context) {
 
         fs.writeFileSync(sourceFile, content, 'utf-8');
     }
-};
+}
