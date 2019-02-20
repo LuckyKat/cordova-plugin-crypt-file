@@ -16,7 +16,7 @@ module.exports = function(context) {
     var key = crypto.randomBytes(24).toString('base64');
     var iv = crypto.randomBytes(12).toString('base64');
 
-    console.log('key=' + key + ', iv=' + iv)
+    console.log('key=' + key + ', iv=' + iv);
 
     var targetFiles = loadCryptFileTargets();
 
@@ -29,6 +29,13 @@ module.exports = function(context) {
         var platformApi = platforms.getPlatformApi(platform, platformPath);
         var platformInfo = platformApi.getPlatformInfo();
         var wwwDir = platformInfo.locations.www;
+        var pluginDir;
+
+        if (platform === 'ios') {
+            // skip iOS due to WKWebview issues
+            console.log('cordova-plugin-crypt-file: skipped iOS, use other plugin for encryption.');
+            return;
+        }
 
         findCryptFiles(wwwDir).filter(function(file) {
             return fs.statSync(file).isFile() && isCryptFile(file.replace(wwwDir, ''));
@@ -39,7 +46,6 @@ module.exports = function(context) {
         });
 
         if (platform == 'ios') {
-            var pluginDir;
             try {
               var ios_parser = context.requireCordovaModule('cordova-lib/src/cordova/metadata/ios_parser'),
                   iosParser = new ios_parser(platformPath);
@@ -55,7 +61,13 @@ module.exports = function(context) {
             replaceCryptKey_ios(pluginDir, key, iv);
 
         } else if (platform == 'android') {
-            var pluginDir = path.join(platformPath, 'app/src/main/java');
+            pluginDir = path.join(platformPath, 'app', 'src', 'main', 'java');
+            
+            // backwards compatibility with cordova <7
+            if (!fs.existsSync(pluginDir)) {
+                pluginDir = path.join(platformPath, 'src');
+            }
+
             replaceCryptKey_android(pluginDir, key, iv);
 
             var cfg = new ConfigParser(platformInfo.projectConfig.path);
@@ -83,7 +95,7 @@ module.exports = function(context) {
         list.filter(function(file) {
             return fs.statSync(path.join(dir, file)).isDirectory();
         }).forEach(function(file) {
-            var subDir = path.join(dir, file)
+            var subDir = path.join(dir, file);
             var subFileList = findCryptFiles(subDir);
             fileList = fileList.concat(subFileList);
         });
@@ -112,7 +124,7 @@ module.exports = function(context) {
                         exclude.push(celm.attrib.regex.trim());
                     }
                 });
-            })
+            });
         }
 
         return {'include': include, 'exclude': exclude};
@@ -153,7 +165,7 @@ module.exports = function(context) {
     }
 
     function replaceCryptKey_android(pluginDir, key, iv) {
-        var sourceFile = path.join(pluginDir, 'com/tkyaji/cordova/DecryptResource.java');
+        var sourceFile = path.join(pluginDir, 'com', 'tkyaji', 'cordova', 'DecryptResource.java');
         var content = fs.readFileSync(sourceFile, 'utf-8');
 
         var includeArrStr = targetFiles.include.map(function(pattern) { return '"' + pattern.replace('\\', '\\\\') + '"'; }).join(', ');
@@ -166,4 +178,4 @@ module.exports = function(context) {
 
         fs.writeFileSync(sourceFile, content, 'utf-8');
     }
-}
+};
